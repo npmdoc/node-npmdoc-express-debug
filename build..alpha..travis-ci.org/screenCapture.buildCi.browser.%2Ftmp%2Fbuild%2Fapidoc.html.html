@@ -56,6 +56,15 @@
 
         <li>
 
+            <a class="apidocElementLiA" href="#apidoc.element.express-debug.express-debug">
+            function <span class="apidocSignatureSpan"></span>express-debug
+            <span class="apidocSignatureSpan">(app, settings)</span>
+            </a>
+
+        </li>
+
+        <li>
+
             <span class="apidocSignatureSpan">object <span class="apidocSignatureSpan">express-debug.</span>request</span>
 
         </li>
@@ -162,6 +171,58 @@
 
 <div class="apidocSectionDiv">
 <h1><a href="#apidoc.module.express-debug" id="apidoc.module.express-debug">module express-debug</a></h1>
+
+
+    <h2>
+        <a href="#apidoc.element.express-debug.express-debug" id="apidoc.element.express-debug.express-debug">
+        function <span class="apidocSignatureSpan"></span>express-debug
+        <span class="apidocSignatureSpan">(app, settings)</span>
+        </a>
+    </h2>
+    <ul>
+    <li>description and source-code<pre class="apidocCodePre">express-debug = function (app, settings) {
+    // initialize settings
+    settings = xtend(defaults, settings || {});
+
+    // load and initialize panels
+    panels.load(app, settings.panels.concat(settings.extra_panels), settings);
+
+    response.init(app, settings);
+
+
+    var handle = app.handle;
+    app.handle = function (req) {
+        req.EDT = {};
+        panels.handle(req);
+        handle.apply(this, arguments);
+    };
+
+    // we need to carefully insert EDT at the correct location in the
+    // middleware stack to maintain all functionality
+    var connectr = require('connectr')(app);
+    connectr.index(1).as('express');
+
+    connectr.after('express').use(function EDT(req, res, next) {
+        panels.request(req);
+        response.patch(res);
+
+        if (settings.path === req.path) {
+            // standalone express-debug page
+            res.render();
+        } else {
+            next();
+        }
+    }).as('express-debug');
+
+
+    if (panels.use_requests) {
+        // grab raw request body in case of non-JSON/form-data
+        connectr.after('express-debug').use(request.rawBody);
+    }
+}</pre></li>
+    <li>example usage<pre class="apidocCodePre">n/a</pre></li>
+    </ul>
+
 
 
 
