@@ -678,8 +678,8 @@ local.templateApidocHtml = '\
                         tmp.skip = local.path.extname(file) !== '.js' ||
                             file.indexOf(options.packageJson.main) >= 0 ||
                             new RegExp('(?:\\b|_)(?:archive|artifact|asset|' +
-                                'bin|bower_components|build|' +
-                                'cli|coverage|' +
+                                'bower_components|build|' +
+                                'coverage|' +
                                 'doc|dist|' +
                                 'example|external|' +
                                 'fixture|' +
@@ -12030,7 +12030,10 @@ return Utf8ArrayToStr(bff);
                 onError();
                 return;
             }
-            local.objectSetDefault(options, { blacklistDict: local });
+            local.objectSetDefault(options, {
+                blacklistDict: local,
+                require: local.requireInSandbox
+            });
             // create apidoc.html
             local.fsWriteFileWithMkdirpSync(
                 local.env.npm_config_dir_build + '/apidoc.html',
@@ -12178,6 +12181,7 @@ return Utf8ArrayToStr(bff);
                 dir: local.env.npm_package_buildCustomOrg,
                 modeNoApidoc: true,
                 modulePathList: options.modulePathList,
+                require: local.requireInSandbox,
                 template: local.assetsDict['/assets.readmeCustomOrg.' + local.env.GITHUB_ORG +
                     '.template.md']
             });
@@ -14130,6 +14134,64 @@ instruction\n\
             return module.exports;
         };
 
+        local.requireInSandbox = function (file) {
+        /*
+         * this function will require the file in a sandbox-lite env
+         */
+            var exports, mockDict, mockList;
+            exports = {};
+            mockList = [];
+            mockList.push([ local.global, {
+                setImmediate: local.nop,
+                setInterval: local.nop,
+                setTimeout: local.nop
+            }]);
+            [
+                local.child_process,
+                local.cluster,
+                local.http,
+                local.https,
+                local.net,
+                local.repl,
+                process.stdin
+            ].forEach(function (module) {
+                mockDict = {};
+                Object.keys(module).forEach(function (key) {
+                    if (typeof module[key] === 'function') {
+                        mockDict[key] = function () {
+                            return;
+                        };
+                        // coverage-hack
+                        mockDict[key]();
+                    }
+                });
+                mockList.push([ module, mockDict ]);
+            });
+            [
+                local.fs
+            ].forEach(function (module) {
+                mockDict = {};
+                Object.keys(module).forEach(function (key) {
+                    if (typeof module[key] === 'function' &&
+                            key.slice(0, 1).toLowerCase() === 'w') {
+                        mockDict[key] = function () {
+                            return;
+                        };
+                        // coverage-hack
+                        mockDict[key]();
+                    }
+                });
+                mockList.push([ module, mockDict ]);
+            });
+            local.testMock(mockList, function (onError) {
+                local.tryCatchOnError(function () {
+                    exports = require(file);
+                }, console.error);
+                onError();
+            }, local.onErrorThrow);
+            return exports;
+        };
+
         local.serverRespondDefault = function (request, response, statusCode, error) {
         /*
          * this function will respond with a default message,
@@ -15413,6 +15475,7 @@ instruction\n\
         local.Module = require('module');
         local.__require = require;
         local.child_process = require('child_process');
+        local.cluster = require('cluster');
         local.fs = require('fs');
         local.http = require('http');
         local.https = require('https');
